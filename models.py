@@ -10,3 +10,10 @@ class LSTMModel(tf.keras.Model):
     def call(self, inputs):
         x = self.lstm(inputs)
         return self.dense(x)
+    
+class CNNModel(tf.keras.model): 
+    def __init__(self, input_shape): 
+        super(CNNModel, self).__init__()
+        self.layers = tf.layers.Sequential([
+            tf.keras.layers.Conv1D(filters=64, kernel_size=3, activation='relu', input_shape = input_shape)
+        ])
