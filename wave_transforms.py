@@ -23,7 +23,7 @@ def discrete_wave_transform_1d(data):
             pixel_slice = data[:, h, w]
             coeffs = pywt.dwt(pixel_slice, wavelet='db4')
             cA, cD = coeffs 
-    return 0
+    return np.stack(cA), np.stack(cD)
 
 def transform(data): 
     # for each 12 month chunk (slice when i know how)
