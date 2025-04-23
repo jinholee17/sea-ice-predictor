@@ -4,6 +4,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
 # Load your file
+#Variables on the dataset include ['time', 'y', 'x', 'lat', 'lon', 'crs', 'conc', 'confidence', 'status_flag']
 file_path = "SEAICE_ARC_PHY_AUTO_L4_NRT_011_015/cmems_obs-si_arc_phy-siconc_nrt_L4-auto_P1D_202105/2023/01/multisensorSeaIce_202301010600.nc"  # replace with your actual filename
 ds = xr.open_dataset(file_path)
 
