@@ -1,2 +1,4 @@
 data/
-preprocessed/
+preprocessed/X_train.npy
+preprocessed/y_train.npy
+preprocessed/all_frames.npy
