@@ -1,0 +1,10 @@
+gridtype = lambert
+xsize = 200
+ysize = 200
+xfirst = -500000
+xinc = 25000
+yfirst = -500000
+yinc = 25000
+standard_parallel = 45
+central_lat = 90
+central_lon = 0
