@@ -74,7 +74,7 @@ def extract_era5_variables(grib_file, output_dir):
 #     return x, y
 
 
-def read_grib_data(grib_files, dim=128):
+def read_grib_data(grib_files):
     """
     Read GRIB data using CDO, return 2D arrays of shape [dim, dim] per year-month.
     """
@@ -109,13 +109,11 @@ def read_grib_data(grib_files, dim=128):
                 if date.year < 1989 or date.year >= 2023: 
                     continue 
                 year_month = (date.year, date.month)
-                print("check if all month data has been processed")
                 if curr_year_month and curr_year_month != year_month:
-                    print("reshape month done")
-                    print("size of vector", len(data[curr_year_month]))
+                    assert len(data[curr_year_month]) == 128 * 128
                     flattened = data[curr_year_month]
-                    data[curr_year_month] = np.array(flattened).reshape((dim, dim))
-                print("append and move on!")
+                    flattened = np.asarray(flattened, dtype=float).flatten()
+                    data[curr_year_month] = flattened.reshape((128, 128))
                 if year_month not in data: 
                     data[year_month] = []
                 data[year_month].append(value)
@@ -125,8 +123,8 @@ def read_grib_data(grib_files, dim=128):
             if data[year_month]:
                 flattened = data[curr_year_month]
                 data[curr_year_month] = np.array(flattened).reshape((dim, dim))
-            print(len(data))
             all_vars_data.append(data)
+            print("Finished processing ", var_name)
 
         except Exception as e:
             print(f"Error processing {var_name}: {e}")
@@ -161,21 +159,21 @@ def main():
     print("done!")
     print("Extracting data from grib files...")
 
-    extracted_data = read_grib_data(extracted_files, [97, 1440])
+    extracted_data = read_grib_data(extracted_files)
     print("done!")
-    # if not extracted_data:
-    #     print("No data read from grib files")
-    #     return
+    if not extracted_data:
+        print("No data read from grib files")
+        return
     
-    # # Print a sample of dates and values for debugging
-    # for var in extracted_data:
-    #     print(f"\nSample data for {var}:")
-    #     if 'dates' in extracted_data[var] and extracted_data[var]['dates']:
-    #         num_samples = min(5, len(extracted_data[var]['dates']))
-    #         for i in range(num_samples):
-    #             print(f"  Date: {extracted_data[var]['dates'][i]}, Value: {extracted_data[var]['values'][i]}")
-    #     else:
-    #         print("  No dates available")
+    # Print a sample of dates and values for debugging
+    for var in extracted_data:
+        print(f"\nSample data for {var}:")
+        if 'dates' in extracted_data[var] and extracted_data[var]['dates']:
+            num_samples = min(5, len(extracted_data[var]['dates']))
+            for i in range(num_samples):
+                print(f"  Date: {extracted_data[var]['dates'][i]}, Value: {extracted_data[var]['values'][i]}")
+        else:
+            print("  No dates available")
     return 
 
 if __name__ == "__main__":
