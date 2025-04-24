@@ -2,9 +2,7 @@
 import subprocess
 import os
 import numpy as np
-import cfgrib
 import pickle
-import xarray as xr
 from datetime import datetime
 #Reused same logic from preprocessing1D.py 
 def extract_era5_variables(grib_file, output_dir):
@@ -122,29 +120,33 @@ def read_grib_data(grib_files):
             # Save final month
             if data[year_month]:
                 flattened = data[curr_year_month]
-                data[curr_year_month] = np.array(flattened).reshape((dim, dim))
-            all_vars_data.append(data)
+                data[curr_year_month] = np.array(flattened).reshape((128, 128))
+            stacked_data = np.stack([data[date] for date in sorted(data.keys())], axis=0)
+            all_vars_data.append(stacked_data)
             print("Finished processing ", var_name)
 
         except Exception as e:
             print(f"Error processing {var_name}: {e}")
             continue
+    return np.array(all_vars_data)
 
 
-def save_2d_array(data, year_month, var_name):
+def save_2d_array(data, var_name):
     """
     Save the accumulated x/y/value data into a 2D numpy array file.
     """
-    year, month = year_month
-    file_name = f"{var_name}_{year}_{month:02d}.npy"
-    np.save(file_name, data)
-    print(f"Saved {file_name}")
+    file_name = f"ERA5_data"
+    np.save(f"{file_name}_{var_name}", data)
+    print(f"Saved {var_name}")
 
 def combine_era5_osisaf(era5_data, osisaf_data):
     # osisaf data has shape [380, 128, 128]
+    # ensure that both values passed in are 
     # make the era5 data have same shape.... 
     # map lat/lon to osisaf 
-    combined_data = []
+    print(era5_data.shape)
+    print(osisaf_data.shape)
+    combined_data = np.stack([era5_data, osisaf_data], axis = 0)
     return combined_data 
 
 def main(): 
@@ -153,6 +155,7 @@ def main():
     # output_dir = "./2D_extracted_era5"
     # print("Extracting ERA5 variables...")
     # extracted_files = extract_era5_variables(grib_file, output_dir)
+    variables = ['sst', 'sp', 'tp', 'slhf', 'sshf']
     extracted_files = [("slhf", "2D_extracted_era5/slhf_2D.grib"), ('sp',"2D_extracted_era5/sp_2D.grib"), 
                        ('sshf', "2D_extracted_era5/sshf_2D.grib"), ('sst', "2D_extracted_era5/sst_2D.grib"),
                        ('tp', "2D_extracted_era5/tp_2D.grib")]
@@ -161,19 +164,9 @@ def main():
 
     extracted_data = read_grib_data(extracted_files)
     print("done!")
-    if not extracted_data:
-        print("No data read from grib files")
-        return
-    
-    # Print a sample of dates and values for debugging
-    for var in extracted_data:
-        print(f"\nSample data for {var}:")
-        if 'dates' in extracted_data[var] and extracted_data[var]['dates']:
-            num_samples = min(5, len(extracted_data[var]['dates']))
-            for i in range(num_samples):
-                print(f"  Date: {extracted_data[var]['dates'][i]}, Value: {extracted_data[var]['values'][i]}")
-        else:
-            print("  No dates available")
+    print(extracted_data.shape)
+    for i, arr in enumerate(extracted_data): 
+        save_2d_array(arr, variables[i])
     return 
 
 if __name__ == "__main__":
