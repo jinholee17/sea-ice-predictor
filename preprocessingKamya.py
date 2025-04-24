@@ -2,7 +2,9 @@
 import subprocess
 import os
 import numpy as np
+import cfgrib
 import pickle
+import xarray as xr
 from datetime import datetime
 #Reused same logic from preprocessing1D.py 
 def extract_era5_variables(grib_file, output_dir):
@@ -13,7 +15,7 @@ def extract_era5_variables(grib_file, output_dir):
     os.makedirs(output_dir, exist_ok=True)
     
     # Variables from the file
-    variables = ['var34', 'var134', 'var228', 'var147', 'var146']
+    variables = ['sst', 'sp', 'tp', 'slhf', 'sshf']
     print(f"Processing variables: {variables}")
     
     extracted_files = []
@@ -27,136 +29,154 @@ def extract_era5_variables(grib_file, output_dir):
         try:
             subprocess.run(cmd, check=True)
             
-            # Map data to Lambert grid 
-            lambert_grib = os.path.join(output_dir, f"{var}_lambert.grib")
-            cmd = ["cdo", "remapbil,lambert_grid.txt", grib_file, lambert_grib]
-            subprocess.run(cmd, check=True)
-
-            
-            # Add to the list of extracted files
-            extracted_files.append((var, lambert_grib))
+            #Map data to 128 x 128 Lambert grid 
+            remapped_file = os.path.join(output_dir, f"{var}_2D.grib")
+            result = subprocess.run(["cdo", "-remapbil,r128x128.txt", temp_grib , remapped_file])
+            if result.returncode != 0:
+                print(f"Error remapping to Lambert for {var}: {result.stderr}")
+                continue  # Skip this variable if remapping failed
+            #Add to the list of extracted files
+            extracted_files.append((var, remapped_file))
             
             # Clean up the temp file
             os.remove(temp_grib)
             
-            print(f"Created {lambert_grib}")
+            print(f"Created {remapped_file}")
         
         except subprocess.CalledProcessError as e:
             print(f"Error processing {var}: {e}")
     
     return extracted_files
 
-def read_grib_files(grib_files): 
+# def latlon_to_laea(lat, lon):
+#     """
+#     Convert lat-lon coordinates to Lambert Azimuthal Equal Area 
+#     """
+#     lat0 = 90
+#     lon0 = 0 
+#     earth = 6371000
+#     x = 0 
+#     y = 0 
+#     # Convert degrees to radians
+#     lat_rad = np.radians(lat)
+#     lon_rad = np.radians(lon)
+#     lat0_rad = np.radians(lat0)
+#     lon0_rad = np.radians(lon0)
+
+#     # following formula for conversion
+#     k = np.sqrt(2 / (1 + np.sin(lat0_rad) * np.sin(lat_rad) +
+#                        np.cos(lat0_rad) * np.cos(lat_rad) * np.cos(lon_rad - lon0_rad)))
+
+#     # Calculate new coordinates 
+#     x = earth * k * np.cos(lat_rad) * np.sin(lon_rad - lon0_rad)
+#     y = earth * k * (np.cos(lat0_rad) * np.sin(lat_rad) -
+#                       np.sin(lat0_rad) * np.cos(lat_rad) * np.cos(lon_rad - lon0_rad))
+#     return x, y
+
+
+def read_grib_data(grib_files, dim=128):
     """
-    Use CDO to read grib files and extract data
+    Read GRIB data using CDO, return 2D arrays of shape [dim, dim] per year-month.
     """
-    combined_data = {}
-    
+    all_vars_data = []
     for var_name, grib_file in grib_files:
         try:
-            # Use CDO to get spatial data at each time step
-            cmd = ["cdo", "output", grib_file]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            # 
-            lines = result.stdout.strip().split('\n')
-            values = []
-            
-            # Parse the timestamps with a more robust approach
-            for ts in lines:
-                try:
-                    # Handle various possible formats
-                    # First, try to extract just the date portion if there's a T separator
-                    if 'T' in ts:
-                        date_part = ts.split('T')[0]
-                    else:
-                        date_part = ts.split()[0]  # In case it's space-separated
-                    
-                    # Now parse the date part
-                    date_parts = date_part.split('-')
-                    year = int(date_parts[0])
-                    month = int(date_parts[1])
-                    day = int(date_parts[2])
-                    
-                    dates.append(datetime(year, month, day))
-                except Exception as e:
-                    print(f"Error parsing timestamp {ts}: {e}")
-            
-            # Use CDO to extract the actual values
-            cmd = ["cdo", "outputf,%f", grib_file]
-            result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-            
-            # Process the output to get values
-            values_str = result.stdout.strip().split()
-            values = []
-            
-            # Parse the values
-            for val_str in values_str:
-                try:
-                    value = float(val_str)
-                    values.append(value)
-                except ValueError as e:
-                    print(f"Error parsing value {val_str}: {e}")
-            
-            # Make sure dates and values have the same length
-            if len(dates) != len(values):
-                print(f"Warning: Number of dates ({len(dates)}) does not match number of values ({len(values)}) for {var_name}")
+            cmd = ["cdo", "outputtab,date,lat,lon,value", grib_file]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+
+            if result.returncode != 0:
+                print(f"Error executing CDO command: {result.stderr}")
+                continue
+
+            lines = result.stdout.strip().splitlines()
+            data = {} 
+            curr_year_month = None
+
+            for line in lines:
                 
-                # If we have dates but not the right number, try an alternative approach
-                if len(dates) == 0 and len(values) > 0:
-                    print(f"Using alternative approach to get dates for {var_name}")
-                    
-                    # Try to infer the dates from the meta information
-                    cmd = ["cdo", "showdate", grib_file]
-                    result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-                    
-                    date_strs = result.stdout.strip().split()
-                    alternative_dates = []
-                    
-                    for date_str in date_strs:
-                        try:
-                            # Format is typically "YYYYMMDD"
-                            year = int(date_str[:4])
-                            month = int(date_str[4:6])
-                            day = int(date_str[6:8])
-                            alternative_dates.append(datetime(year, month, day))
-                        except (ValueError, IndexError) as e:
-                            print(f"Error parsing date {date_str}: {e}")
-                    
-                    if len(alternative_dates) == len(values):
-                        dates = alternative_dates
-                        print(f"Successfully got {len(dates)} dates using alternative method")
-                    else:
-                        print(f"Alternative method yielded {len(alternative_dates)} dates, still doesn't match values")
-                        
-                        # As a last resort, create synthetic dates
-                        if len(values) > 0:
-                            print(f"Creating synthetic dates for {var_name}")
-                            # Create a date for each month from 1979-01 to end
-                            synthetic_dates = []
-                            for i in range(len(values)):
-                                year = 1979 + (i // 12)
-                                month = (i % 12) + 1
-                                synthetic_dates.append(datetime(year, month, 1))
-                            
-                            dates = synthetic_dates
-                            print(f"Created {len(dates)} synthetic dates")
-            
-            # Store the data
-            combined_data[var_name] = {
-                'dates': dates,
-                'values': values
-            }
-            
-            print(f"Extracted {len(dates)} time points for {var_name}")
-            
+                if any(keyword in line for keyword in ['cdo', 'Processed', 'variable', 'timesteps', '[', 'MB', 's]']):
+                    continue
+                parts = line.strip().split()
+                if len(parts) < 4 or parts[0] == '#':
+                    continue
+                date_str, lat, lon, value = parts[-4:]
+                value = float(value)
+                # TODO figure out how to get the lat lon to convert and inlcude in data 
+                #Skip data points 
+                if value == '-9e+33':
+                    continue
+                date = datetime.strptime(date_str, "%Y-%m-%d")
+                if date.year < 1989 or date.year >= 2023: 
+                    continue 
+                year_month = (date.year, date.month)
+                print("check if all month data has been processed")
+                if curr_year_month and curr_year_month != year_month:
+                    print("reshape month done")
+                    print("size of vector", len(data[curr_year_month]))
+                    flattened = data[curr_year_month]
+                    data[curr_year_month] = np.array(flattened).reshape((dim, dim))
+                print("append and move on!")
+                if year_month not in data: 
+                    data[year_month] = []
+                data[year_month].append(value)
+                curr_year_month = year_month
+
+            # Save final month
+            if data[year_month]:
+                flattened = data[curr_year_month]
+                data[curr_year_month] = np.array(flattened).reshape((dim, dim))
+            print(len(data))
+            all_vars_data.append(data)
+
         except Exception as e:
             print(f"Error processing {var_name}: {e}")
-    
-    return combined_data
-            
+            continue
 
-def combine_era5_osisaf(): 
-    return 
+
+def save_2d_array(data, year_month, var_name):
+    """
+    Save the accumulated x/y/value data into a 2D numpy array file.
+    """
+    year, month = year_month
+    file_name = f"{var_name}_{year}_{month:02d}.npy"
+    np.save(file_name, data)
+    print(f"Saved {file_name}")
+
+def combine_era5_osisaf(era5_data, osisaf_data):
+    # osisaf data has shape [380, 128, 128]
+    # make the era5 data have same shape.... 
+    # map lat/lon to osisaf 
+    combined_data = []
+    return combined_data 
 
 def main(): 
+
+    # grib_file = "data/8ebcad7553eb3102c9d0cde229ef4d25.grib"
+    # output_dir = "./2D_extracted_era5"
+    # print("Extracting ERA5 variables...")
+    # extracted_files = extract_era5_variables(grib_file, output_dir)
+    extracted_files = [("slhf", "2D_extracted_era5/slhf_2D.grib"), ('sp',"2D_extracted_era5/sp_2D.grib"), 
+                       ('sshf', "2D_extracted_era5/sshf_2D.grib"), ('sst', "2D_extracted_era5/sst_2D.grib"),
+                       ('tp', "2D_extracted_era5/tp_2D.grib")]
+    print("done!")
+    print("Extracting data from grib files...")
+
+    extracted_data = read_grib_data(extracted_files, [97, 1440])
+    print("done!")
+    # if not extracted_data:
+    #     print("No data read from grib files")
+    #     return
+    
+    # # Print a sample of dates and values for debugging
+    # for var in extracted_data:
+    #     print(f"\nSample data for {var}:")
+    #     if 'dates' in extracted_data[var] and extracted_data[var]['dates']:
+    #         num_samples = min(5, len(extracted_data[var]['dates']))
+    #         for i in range(num_samples):
+    #             print(f"  Date: {extracted_data[var]['dates'][i]}, Value: {extracted_data[var]['values'][i]}")
+    #     else:
+    #         print("  No dates available")
     return 
+
+if __name__ == "__main__":
+    main()
