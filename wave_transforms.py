@@ -47,11 +47,22 @@ def discrete_wave_transform_1d(data):
 
 
 def transform(data): 
-    # for each 12 month chunk (slice when i know how)
-
-    spatial_dwt = discrete_wave_transform_2d(data)
-    temporal_dwt = discrete_wave_transform_1d(data)
-    return spatial_dwt, temporal_dwt
+    # for each 12  month chunk (slice when i know how)
+    #shape should be (6, 380, 128, 128)
+    spatial_dwts = [] 
+    temporal_dwts = []
+    # Can also try by 24-month chunks 
+    slice_size = 12 
+    num_full_slices = data.shape[1] // slice_size
+    leftover = data.shape[1] % slice_size
+    data_trimmed = data[:, leftover:, :, :] # discarding the first 20 entries
+    # TODO do you think we should throw away 8  data points? 
+    sliced_array = np.stack([data_trimmed[:, i*slice_size:(i+1)*slice_size, :, :]
+    for i in range(num_full_slices)], axis=0)
+    for slice in sliced_array: 
+        spatial_dwts.append(discrete_wave_transform_2d(slice))
+        temporal_dwts.append(discrete_wave_transform_1d(slice))
+    return spatial_dwts, temporal_dwts
 
 frames = np.load("preprocessed/all_frames.npy")  # shape: (N, H, W)
 print("Loaded shape:", frames.shape)
