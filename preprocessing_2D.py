@@ -137,12 +137,12 @@ def extract_era5_variables(grib_file, output_dir):
 #                       np.sin(lat0_rad) * np.cos(lat_rad) * np.cos(lon_rad - lon0_rad))
 #     return x, y
 
-
 def read_grib_data(grib_files):
     """
     Read GRIB data using CDO, return 2D arrays of shape [dim, dim] per year-month.
     """
     all_vars_data = []
+    invalid_year_month = [(2010, 11), (2011, 1), (2011, 11), (2012, 1), (2012, 11), (2013, 1), (2013, 11), (2020, 3), (2020, 11)]
     for var_name, grib_file in grib_files:
         try:
             cmd = ["cdo", "outputtab,date,lat,lon,value", grib_file]
@@ -170,9 +170,9 @@ def read_grib_data(grib_files):
                 if value == '-9e+33':
                     continue
                 date = datetime.strptime(date_str, "%Y-%m-%d")
-                if date.year < 1989 or date.year >= 2023: 
-                    continue 
                 year_month = (date.year, date.month)
+                if date.year < 1989 or date.year >= 2021 or year_month in invalid_year_month:
+                    continue 
                 if curr_year_month and curr_year_month != year_month:
                     assert len(data[curr_year_month]) == 128 * 128
                     flattened = data[curr_year_month]
@@ -184,7 +184,8 @@ def read_grib_data(grib_files):
                 curr_year_month = year_month
 
             # Save final month
-            if data[year_month]:
+            if data[curr_year_month]:
+                print("could be potensh the issue?")
                 flattened = data[curr_year_month]
                 data[curr_year_month] = np.array(flattened).reshape((128, 128))
             stacked_data = np.stack([data[date] for date in sorted(data.keys())], axis=0)
