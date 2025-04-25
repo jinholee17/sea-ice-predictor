@@ -458,7 +458,7 @@ def prepare_for_lstm(normalized_data, seq_length=12, target='extent'):
 
 def main():
     # File paths
-    grib_file = "/Users/duruhuseyni/Desktop/cs1470/sea-ice-predictor/data/8ebcad7553eb3102c9d0cde229ef4d25.grib"
+    grib_file = "data/8ebcad7553eb3102c9d0cde229ef4d25.grib"
     output_dir = "./extracted_era5"
     
     # NSIDC file paths - using the correct paths from your reference code
