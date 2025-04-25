@@ -32,6 +32,9 @@ X = combined[..., np.newaxis]             # (375, 6, 128, 128, 1)
 # Load or create target y of shape (time, 128, 128, 1)
 y = np.load("preprocessed/y_train.npy")
 
+min_len = min(X.shape[0], y.shape[0])
+X = X[:min_len]
+y = y[:min_len]
 # Normalize for tanh
 X = X * 2 - 1
 y = y * 2 - 1
