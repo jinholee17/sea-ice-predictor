@@ -26,7 +26,6 @@ def combine_variables(era5_data):
     print(f"Combined input shape: {combined.shape}")
     
 
-# === Load and reshape combined data ===
 variables = ['sst', 'sp', 'tp', 'slhf', 'sshf']
 X = load_and_stack_era5_variables(variables, data_dir="")
 combined = combine_variables(X)
