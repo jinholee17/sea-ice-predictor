@@ -71,3 +71,10 @@ spatial_out, temporal_out = transform(resized_sampled)
 
 print(f"Spatial Output shapes: {[s.shape for s in spatial_out]}")
 print(f"Temporal Output shapes: {[s.shape for s in temporal_out]}")
+
+#prints the original npy file size:
+
+file_path = "preprocessed/all_frames.npy"
+
+data = np.load(file_path)
+print(f"Shape of input data, {file_path}, was: {data.shape}")
