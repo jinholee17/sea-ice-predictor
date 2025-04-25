@@ -83,8 +83,13 @@ def extract_era5_variables(grib_file, output_dir):
         print(f"Processing variable: {var}")
         
         # Select the variable
-        temp_grib = os.path.join(output_dir, f"{var}_temp.grib")
-        cmd = ["cdo", "selname," + var, grib_file, temp_grib]
+        temp_grib = os.path.join(output_dir, f"{var}_2D.grib").replace("\\", "/")
+        print(temp_grib)
+        print(grib_file)
+        #cmd = ["cdo", "selname," + var, grib_file, temp_grib]
+        cdo_path = r"C:\Users\dhlee\miniconda3\envs\csci1470\Library\bin\cdo.exe"
+        cmd = [cdo_path, "selname," + var, grib_file, temp_grib]
+
         try:
             subprocess.run(cmd, check=True)
             
@@ -215,17 +220,19 @@ def combine_era5_osisaf(era5_data, osisaf_data):
 def main(): 
 
     grib_file = "data/8ebcad7553eb3102c9d0cde229ef4d25.grib"
-    output_dir = "./2D_extracted_era5"
+    output_dir = "2D_extracted_era5"
     print("Extracting ERA5 variables...")
     variables = ['sst', 'sp', 'tp', 'slhf', 'sshf']
     extracted_files = extract_era5_variables(grib_file, output_dir)
     print("Extracting data from grib files...")
-    extracted_data = read_grib_data(extracted_files)
+    era5_data = read_grib_data(extracted_files)
     print("done!")
-    print(extracted_data.shape)
-    for i, arr in enumerate(extracted_data): 
+    print(era5_data.shape)
+    for i, arr in enumerate(era5_data): 
         save_2d_array(arr, variables[i])
     process_2D_image_data()
+
+    era5_data = np.array(era5_data)  # shape: (5, 408, 128, 128)
     return 
 
 if __name__ == "__main__":
