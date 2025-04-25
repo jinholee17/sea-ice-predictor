@@ -1,8 +1,11 @@
 import tensorflow as tf
 import numpy as np
 import pickle
+import csv
+import pandas as pd
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+from datetime import datetime
 
 class LSTMModel:
     def __init__(self, input_shape, n_neurons=50):
@@ -17,9 +20,20 @@ class LSTMModel:
         self.n_neurons = n_neurons
         self.model = None
         self.history = None
+        self.learning_rate = None
+        self.loss_function = None
         
-    def build_model(self):
-        """Build the LSTM model architecture"""
+    def build_model(self, learning_rate=0.001, loss_function='mae'):
+        """
+        Build the LSTM model architecture
+        
+        Args:
+        - learning_rate: Learning rate for Adam optimizer
+        - loss_function: Loss function to use ('mae' or 'mse')
+        """
+        self.learning_rate = learning_rate
+        self.loss_function = loss_function
+        
         self.model = tf.keras.models.Sequential([
             tf.keras.layers.LSTM(self.n_neurons, activation='tanh', 
                  recurrent_activation='sigmoid',
@@ -27,10 +41,9 @@ class LSTMModel:
             tf.keras.layers.Dense(1, activation='linear')
         ])
         
-        # Compile the model with Adam optimizer and MAE loss
         self.model.compile(
-            optimizer=tf.keras.optimizers.Adam(),
-            loss='mae',
+            optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
+            loss=loss_function,
             metrics=['mse', 'mae']
         )
         
@@ -53,7 +66,6 @@ class LSTMModel:
         """
         callbacks = []
         
-        # Add learning rate scheduler if requested
         if use_lr_scheduler:
             lr_scheduler = tf.keras.callbacks.ReduceLROnPlateau(
                 monitor='val_loss',
@@ -64,7 +76,6 @@ class LSTMModel:
             )
             callbacks.append(lr_scheduler)
         
-        # Add early stopping
         early_stopping = tf.keras.callbacks.EarlyStopping(
             monitor='val_loss',
             patience=30,
@@ -96,12 +107,10 @@ class LSTMModel:
         """
         predictions = self.model.predict(X_test)
         
-        # Calculate metrics
         mae = np.mean(np.abs(y_test - predictions.flatten()))
         mse = np.mean((y_test - predictions.flatten())**2)
         rmse = np.sqrt(mse)
         
-        # Calculate R² score
         ss_res = np.sum((y_test - predictions.flatten())**2)
         ss_tot = np.sum((y_test - np.mean(y_test))**2)
         r2 = 1 - (ss_res / ss_tot)
@@ -126,7 +135,7 @@ class LSTMModel:
         plt.plot(self.history.history['val_loss'], label='Validation Loss')
         plt.title('Model Training History')
         plt.xlabel('Epoch')
-        plt.ylabel('Mean Absolute Error')
+        plt.ylabel(f'{"Mean Absolute Error" if self.loss_function == "mae" else "Mean Squared Error"}')
         plt.legend()
         plt.grid(True)
         plt.tight_layout()
@@ -141,7 +150,6 @@ class LSTMModel:
         """
         predictions = self.model.predict(X_test)
         
-        # Inverse transform if normalization parameters are available
         if f'{target}_min' in normalized_data and f'{target}_max' in normalized_data:
             min_val = normalized_data[f'{target}_min']
             max_val = normalized_data[f'{target}_max']
@@ -164,7 +172,6 @@ class LSTMModel:
         print(f"Prediction plot saved to {save_path}")
         plt.close()
 
-        # Optional: print comparison table
         print("\nActual vs Predicted Values:")
         print("Index\tActual\t\tPredicted\tDifference")
         print("-" * 50)
@@ -173,9 +180,100 @@ class LSTMModel:
             print(f"{i}\t{y_test_actual[i]:.6f}\t{predictions_actual[i]:.6f}\t{diff:.6f}")
 
 
+class ExperimentTracker:
+    """Class to track experiments and create comparison tables"""
+    
+    def __init__(self):
+        self.experiments = []
+        self.best_experiment = None
+        self.best_metrics = {'MAE': float('inf')}
+    
+    def add_experiment(self, experiment_config, metrics, model=None):
+        """
+        Add experiment results to tracker
+        
+        Args:
+        - experiment_config: Dictionary of experiment configuration
+        - metrics: Dictionary of evaluation metrics
+        - model: The trained model (optional)
+        """
+        experiment = {
+            'config': experiment_config,
+            'metrics': metrics,
+            'model': model
+        }
+        
+        self.experiments.append(experiment)
+        
+        if metrics['MAE'] < self.best_metrics['MAE']:
+            self.best_metrics = metrics
+            self.best_experiment = experiment
+    
+    def print_results_table(self):
+        """Print formatted table of experiment results"""
+        sorted_experiments = sorted(self.experiments, key=lambda x: x['metrics']['MAE'])
+        
+        print("\n" + "="*100)
+        print("LSTM MODEL EXPERIMENTS RESULTS")
+        print("="*100)
+        headers = "| # | Neurons | Learning Rate | Loss Func | Batch Size | LR Scheduler | MAE | MSE | RMSE | R² |"
+        print(headers)
+        print("|" + "-"*(len(headers)-2) + "|")
+        
+        for idx, exp in enumerate(sorted_experiments):
+            config = exp['config']
+            metrics = exp['metrics']
+            
+            print(
+                f"| {idx+1} | {config['n_neurons']} | {config['learning_rate']:.6f} | "
+                f"{config['loss_function']} | {config['batch_size']} | "
+                f"{str(config['use_lr_scheduler']):5} | {metrics['MAE']:.6f} | "
+                f"{metrics['MSE']:.6f} | {metrics['RMSE']:.6f} | {metrics['R2']:.6f} |"
+            )
+        
+        print("="*100)
+        best_idx = self.experiments.index(self.best_experiment)
+        print(f"Best model: #{best_idx+1} (MAE: {self.best_metrics['MAE']:.6f})")
+        print("="*100)
+    
+    def save_results_to_csv(self, filename='lstm_experiments.csv'):
+        """Save experiment results to CSV file"""
+        with open(filename, 'w', newline='') as csvfile:
+            fieldnames = [
+                'Experiment', 'Neurons', 'Learning Rate', 'Loss Function', 
+                'Batch Size', 'LR Scheduler', 'MAE', 'MSE', 'RMSE', 'R²'
+            ]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            
+            writer.writeheader()
+            for idx, exp in enumerate(self.experiments):
+                config = exp['config']
+                metrics = exp['metrics']
+                
+                writer.writerow({
+                    'Experiment': idx+1,
+                    'Neurons': config['n_neurons'],
+                    'Learning Rate': config['learning_rate'],
+                    'Loss Function': config['loss_function'],
+                    'Batch Size': config['batch_size'],
+                    'LR Scheduler': config['use_lr_scheduler'],
+                    'MAE': metrics['MAE'],
+                    'MSE': metrics['MSE'],
+                    'RMSE': metrics['RMSE'],
+                    'R²': metrics['R2']
+                })
+        
+        print(f"Experiment results saved to {filename}")
+    
+    def get_best_model(self):
+        """Return the best model based on MAE"""
+        if self.best_experiment:
+            return self.best_experiment['model']
+        return None
+
+
 def main():
-    """Main function to run the LSTM model"""
-    # Load processed data
+    """Main function to run the LSTM model experiments"""
     print("Loading processed data...")
     with open('processed_ice_data.pkl', 'rb') as f:
         data = pickle.load(f)
@@ -185,7 +283,6 @@ def main():
     feature_cols = data['feature_cols']
     normalized_data = data['normalized_data']
     
-    # Split the data into train, validation, and test sets
     X_train, X_temp, y_train, y_temp = train_test_split(X, y, test_size=0.3, shuffle=False)
     X_val, X_test, y_val, y_test = train_test_split(X_temp, y_temp, test_size=0.5, shuffle=False)
     
@@ -193,66 +290,90 @@ def main():
     print(f"Validation data shape: {X_val.shape}")
     print(f"Test data shape: {X_test.shape}")
     
-    # Define hyperparameters to experiment with
+    tracker = ExperimentTracker()
+    
     neuron_configs = [32, 50, 64, 100]
+    learning_rates = [0.001, 0.01, 0.0001]
+    loss_functions = ['mae', 'mse']
     batch_sizes = [16, 32, 64]
     use_lr_scheduler_configs = [False, True]
     
-    best_metrics = {'MAE': float('inf')}
-    best_config = None
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Experiment with different configurations
     for n_neurons in neuron_configs:
-        for batch_size in batch_sizes:
-            for use_lr_scheduler in use_lr_scheduler_configs:
-                print(f"\nTraining with {n_neurons} neurons, batch size {batch_size}, "
-                      f"LR scheduler: {use_lr_scheduler}")
-                
-                # Create and build model
-                lstm_model = LSTMModel(input_shape=(X_train.shape[1], X_train.shape[2]), 
-                                     n_neurons=n_neurons)
-                lstm_model.build_model()
-                
-                # Train model
-                history = lstm_model.train(X_train, y_train, X_val, y_val, 
-                                         batch_size=batch_size, 
-                                         use_lr_scheduler=use_lr_scheduler)
-                
-                # Evaluate model on test set
-                metrics = lstm_model.evaluate(X_test, y_test)
-                
-                print("Test Metrics:")
-                for metric_name, value in metrics.items():
-                    print(f"{metric_name}: {value:.6f}")
-                
-                # Update best model if current model is better
-                if metrics['MAE'] < best_metrics['MAE']:
-                    best_metrics = metrics
-                    best_config = {
-                        'n_neurons': n_neurons,
-                        'batch_size': batch_size,
-                        'use_lr_scheduler': use_lr_scheduler
-                    }
-                    best_model = lstm_model
+        for learning_rate in learning_rates:
+            for loss_function in loss_functions:
+                for batch_size in batch_sizes:
+                    for use_lr_scheduler in use_lr_scheduler_configs:
+                        print(f"\nTraining with {n_neurons} neurons, learning rate {learning_rate}, "
+                              f"loss function {loss_function}, batch size {batch_size}, "
+                              f"LR scheduler: {use_lr_scheduler}")
+                        
+                        lstm_model = LSTMModel(input_shape=(X_train.shape[1], X_train.shape[2]), 
+                                             n_neurons=n_neurons)
+                        lstm_model.build_model(learning_rate=learning_rate, loss_function=loss_function)
+                        
+                        history = lstm_model.train(X_train, y_train, X_val, y_val, 
+                                                 batch_size=batch_size, 
+                                                 use_lr_scheduler=use_lr_scheduler)
+                        
+                        metrics = lstm_model.evaluate(X_test, y_test)
+                        
+                        print("Test Metrics:")
+                        for metric_name, value in metrics.items():
+                            print(f"{metric_name}: {value:.6f}")
+                        
+                        experiment_config = {
+                            'n_neurons': n_neurons,
+                            'learning_rate': learning_rate,
+                            'loss_function': loss_function,
+                            'batch_size': batch_size,
+                            'use_lr_scheduler': use_lr_scheduler
+                        }
+                        tracker.add_experiment(experiment_config, metrics, lstm_model)
     
-    # Report best configuration
-    print("\n" + "="*50)
-    print("Best Configuration:")
-    for key, value in best_config.items():
-        print(f"{key}: {value}")
+    tracker.print_results_table()
     
-    print("\nBest Test Metrics:")
-    for metric_name, value in best_metrics.items():
-        print(f"{metric_name}: {value:.6f}")
+    csv_filename = f"lstm_experiments_{timestamp}.csv"
+    tracker.save_results_to_csv(csv_filename)
     
-    # Plot results for the best model
-    best_model.plot_training_history('plots/lstm_training_history.png')
-    best_model.plot_predictions(X_test, y_test, normalized_data, save_path='plots/lstm_predictions.png')
+    best_model = tracker.get_best_model()
+    best_config = tracker.best_experiment['config']
+    
+    best_model.plot_training_history(f'plots/lstm_training_history_{timestamp}.png')
+    best_model.plot_predictions(X_test, y_test, normalized_data, save_path=f'plots/lstm_predictions_{timestamp}.png')
+    
+    model_filename = f"best_lstm_model_{timestamp}.h5"
+    best_model.model.save(model_filename)
+    print(f"\nBest model saved as '{model_filename}'")
+    
+    print("\nCreating experiment summary report...")
+    summary_filename = f"experiment_summary_{timestamp}.txt"
+    with open(summary_filename, 'w') as f:
+        f.write("="*50 + "\n")
+        f.write("LSTM MODEL EXPERIMENT SUMMARY\n")
+        f.write("="*50 + "\n\n")
+        
+        f.write("Best Configuration:\n")
+        for key, value in best_config.items():
+            f.write(f"{key}: {value}\n")
+        
+        f.write("\nBest Metrics:\n")
+        for metric_name, value in tracker.best_metrics.items():
+            f.write(f"{metric_name}: {value:.6f}\n")
+        
+        f.write("\nRecommendation:\n")
+        f.write(f"Based on the experiments, the recommended configuration uses {best_config['n_neurons']} neurons ")
+        f.write(f"with a learning rate of {best_config['learning_rate']}, {best_config['loss_function']} loss function, ")
+        f.write(f"batch size of {best_config['batch_size']}, and ")
+        f.write(f"{'uses' if best_config['use_lr_scheduler'] else 'does not use'} learning rate scheduling.\n\n")
+        
+        f.write("This configuration achieved the following performance metrics on the test set:\n")
+        for metric_name, value in tracker.best_metrics.items():
+            f.write(f"- {metric_name}: {value:.6f}\n")
+    
+    print(f"Summary report saved as '{summary_filename}'")
 
-    
-    # Save the best model
-    best_model.model.save('best_lstm_model.h5')
-    print("\nBest model saved as 'best_lstm_model.h5'")
 
 if __name__ == "__main__":
     main()
