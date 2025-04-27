@@ -1,0 +1,25 @@
+==================================================
+LSTM MODEL EXPERIMENT SUMMARY
+==================================================
+
+Best Configuration:
+n_neurons: 64
+learning_rate: 0.01
+loss_function: mse
+batch_size: 16
+use_lr_scheduler: True
+
+Best Metrics:
+MAE: 0.029179
+MSE: 0.002486
+RMSE: 0.049864
+R2: 0.792295
+
+Recommendation:
+Based on the experiments, the recommended configuration uses 64 neurons with a learning rate of 0.01, mse loss function, batch size of 16, and uses learning rate scheduling.
+
+This configuration achieved the following performance metrics on the test set:
+- MAE: 0.029179
+- MSE: 0.002486
+- RMSE: 0.049864
+- R2: 0.792295
