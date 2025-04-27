@@ -112,30 +112,6 @@ def extract_era5_variables(grib_file, output_dir):
     
     return extracted_files
 
-# def latlon_to_laea(lat, lon):
-#     """
-#     Convert lat-lon coordinates to Lambert Azimuthal Equal Area 
-#     """
-#     lat0 = 90
-#     lon0 = 0 
-#     earth = 6371000
-#     x = 0 
-#     y = 0 
-#     # Convert degrees to radians
-#     lat_rad = np.radians(lat)
-#     lon_rad = np.radians(lon)
-#     lat0_rad = np.radians(lat0)
-#     lon0_rad = np.radians(lon0)
-
-#     # following formula for conversion
-#     k = np.sqrt(2 / (1 + np.sin(lat0_rad) * np.sin(lat_rad) +
-#                        np.cos(lat0_rad) * np.cos(lat_rad) * np.cos(lon_rad - lon0_rad)))
-
-#     # Calculate new coordinates 
-#     x = earth * k * np.cos(lat_rad) * np.sin(lon_rad - lon0_rad)
-#     y = earth * k * (np.cos(lat0_rad) * np.sin(lat_rad) -
-#                       np.sin(lat0_rad) * np.cos(lat_rad) * np.cos(lon_rad - lon0_rad))
-#     return x, y
 
 def read_grib_data(grib_files):
     """
@@ -165,8 +141,6 @@ def read_grib_data(grib_files):
                     continue
                 date_str, lat, lon, value = parts[-4:]
                 value = float(value)
-                # TODO figure out how to get the lat lon to convert and inlcude in data 
-                #Skip data points 
                 if value == '-9e+33':
                     continue
                 date = datetime.strptime(date_str, "%Y-%m-%d")
