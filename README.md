@@ -1,6 +1,9 @@
 # seaicepredictor
 HOW TO RUN 1D LSTM:
 
+HOW TO RUN 1D LSTM:
+1. Download and pre-process data by running preprocessing_1D.py.
+2. Run main method in lstm.py, which will create visualizations, experiments, and save the best model as a result.
 
 HOW TO RUN 2D CNN-LSTM:
 1. Download the data by running downloading_2D.py
