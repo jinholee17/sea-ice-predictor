@@ -14,17 +14,6 @@ def discrete_wave_transform_2d(data):
         cD_list.append(cD)
     return np.stack(cA_list), np.stack(cH_list), np.stack(cV_list), np.stack(cD_list)
   
-
-# def discrete_wave_transform_1d(data): 
-#     # perform temporal discrete wavelet transforms on 3D data 
-#     T, H, W  = data.shape 
-#     # iterate over each pixel to perform wavelet transform 
-#     for h in range(H):
-#         for w in range(W): 
-#             pixel_slice = data[:, h, w]
-#             coeffs = pywt.dwt(pixel_slice, wavelet='db4')
-#             cA, cD = coeffs 
-#     return 0
 def discrete_wave_transform_1d(data): 
     T, H, W  = data.shape
 
@@ -64,28 +53,33 @@ def transform(data):
         temporal_dwts.append(discrete_wave_transform_1d(slice))
     return spatial_dwts, temporal_dwts
 
-frames = np.load("preprocessed/all_frames.npy")  # shape: (N, H, W)
-print("Loaded shape:", frames.shape)
+def main():
+    frames = np.load("preprocessed/all_frames.npy")  # shape: (N, H, W)
+    print("Loaded shape:", frames.shape)
 
-start_year = 1989
-end_year = 2022
-years = list(range(start_year, end_year + 1))
-assert len(years) == 34
+    start_year = 1989
+    end_year = 2022
+    years = list(range(start_year, end_year + 1))
+    assert len(years) == 34
 
-sampled = frames[::12][:len(years)]  # (34, H, W)
-print(f"Sampled shape (1 per year): {sampled.shape}")
-resized_sampled = np.stack([resize(img, (128, 128)) for img in sampled])
-resized_sampled = resized_sampled[:32]  # Trim to 32 time steps
+    sampled = frames[::12][:len(years)]  # (34, H, W)
+    print(f"Sampled shape (1 per year): {sampled.shape}")
+    resized_sampled = np.stack([resize(img, (128, 128)) for img in sampled])
+    resized_sampled = resized_sampled[:32]  # Trim to 32 time steps
 
 
-spatial_out, temporal_out = transform(resized_sampled)
+    spatial_out, temporal_out = transform(resized_sampled)
 
-print(f"Spatial Output shapes: {[s.shape for s in spatial_out]}")
-print(f"Temporal Output shapes: {[s.shape for s in temporal_out]}")
+    print(f"Spatial Output shapes: {[s.shape for s in spatial_out]}")
+    print(f"Temporal Output shapes: {[s.shape for s in temporal_out]}")
 
-#prints the original npy file size:
+    #prints the original npy file size:
 
-file_path = "preprocessed/all_frames.npy"
+    file_path = "preprocessed/all_frames.npy"
 
-data = np.load(file_path)
-print(f"Shape of input data, {file_path}, was: {data.shape}")
+    data = np.load(file_path)
+    print(f"Shape of input data, {file_path}, was: {data.shape}")
+    return
+
+if __name__ == "__main__":
+    main()
