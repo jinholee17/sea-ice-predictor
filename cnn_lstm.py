@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import Conv3D, MaxPooling3D, Flatten, Dense, Reshape, Input
+from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, MaxPooling3D, TimeDistributed, LSTM, Dense, Reshape, Flatten
 from tensorflow.keras.models import Model
 import os
 
@@ -30,6 +30,22 @@ def combine_variables(era5_data):
     np.save("preprocessed/combined_input.npy", combined)
 
     print(f"Combined input shape: {combined.shape}")
+
+def cnn_lstm():
+    input_layer = Input(shape=(5, 128, 128, 1))
+    x = TimeDistributed(Conv2D(32, (3, 3), activation='tanh', padding='same'))(input_layer)
+    x = TimeDistributed(MaxPooling2D(pool_size=(2, 2)))(x)
+
+    x = TimeDistributed(Conv2D(64, (3, 3), activation='tanh', padding='same'))(x)
+    x = TimeDistributed(MaxPooling2D(pool_size=(2, 2)))(x)
+    x = TimeDistributed(Flatten())(x) 
+    x = LSTM(256, activation='tanh')(x) 
+    x = Dense(128 * 128, activation='tanh')(x)
+    output_layer = Reshape((128, 128, 1))(x)
+
+    model = Model(inputs=input_layer, outputs=output_layer)
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    model.summary()
 
 def main():
     combined = np.load("preprocessed/combined_input.npy")
